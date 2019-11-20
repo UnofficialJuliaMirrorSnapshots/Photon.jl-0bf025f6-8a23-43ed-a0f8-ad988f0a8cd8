@@ -1,16 +1,17 @@
 ## Convplutional layers
-"""
-	Convolutional layer
-"""
+
 expand(N, i::Tuple) = i
 expand(N, i::Integer) = ntuple(_ -> i, N)
 
+"""
+Convolutional layer that serves as the base for Conv2D and Conv3D
+"""
 mutable struct Conv <: LazyLayer
-    channels
-    kernel_size
+    channels::Int
+    kernel_size::Union{Int,Tuple}
     activation
-    padding
-    strides
+    padding::Union{Int,Tuple}
+    strides::Union{Int,Tuple}
     dilation
     built::Bool
     use_bias::Bool
@@ -19,8 +20,8 @@ mutable struct Conv <: LazyLayer
 end
 
 function Conv(
-    channels,
-    kernel_size,
+    channels::Int,
+    kernel_size::Union{Int,Tuple},
     activation = identity;
     padding = 0,
     strides = 1,
@@ -56,7 +57,7 @@ function build(layer::Conv, shape::Shape)
     layer.params = (w=w,b=b)
 end
 
-function call(c::Conv, x)
+function call(c::Conv, x::Tensor)
     w,b = c.params
 
     x = Knet.conv4(
@@ -103,18 +104,37 @@ function output_size(c::Conv, input_size)
     tuple(result...)
 end
 
+
+"""
+2D convolution layer (e.g. spatial convolution over images).
+
+This layer creates a convolution kernel that is convolved with the layer
+input to produce a tensor of outputs. If use_bias is true, a bias vector
+is created and added to the outputs. Finally, if activation is not nothing,
+it is applied to the outputs as well.
+"""
 Conv2D = Conv
+
+
+"""
+3D convolution layer (e.g. spatial convolution over volumes).
+
+This layer creates a convolution kernel that is convolved with the layer input
+to produce a tensor of outputs. If use_bias is true, a bias vector is created
+and added to the outputs. Finally, if activation is not nothing, it is
+applied to the outputs as well.
+"""
 Conv3D = Conv
 
 """
 ConvTranspose layer
 """
 mutable struct ConvTranspose <: LazyLayer
-    channels
-    kernel_size
+    channels::Int
+    kernel_size::Union{Int,Tuple}
     activation
-    padding
-    strides
+    padding::Union{Int,Tuple}
+    strides::Union{Int,Tuple}
     dilation
     built::Bool
     use_bias::Bool
@@ -123,9 +143,9 @@ mutable struct ConvTranspose <: LazyLayer
 end
 
 function ConvTranspose(
-    channels,
-    kernel_size;
-    activation = identity,
+    channels::Int,
+    kernel_size::Union{Int,Tuple},
+    activation = identity;
     padding = 0,
     strides = 1,
     dilation = 1,
@@ -160,7 +180,7 @@ function build(layer::ConvTranspose, shape::Tuple)
     layer.params = (w=w,b=b)
 end
 
-function call(c::ConvTranspose, x)
+function call(c::ConvTranspose, x::Tensor)
     w,b = c.params
 
     x = Knet.deconv4(
@@ -177,7 +197,26 @@ function call(c::ConvTranspose, x)
     end
 end
 
+"""
+Transposed 2D convolution layer (sometimes called Deconvolution).
+
+The need for transposed convolutions generally arises from the desire to use a
+transformation going in the opposite direction of a normal convolution,
+i.e., from something that has the shape of the output of some convolution
+to something that has the shape of its input while maintaining a connectivity
+pattern that is compatible with said convolution.
+"""
 Conv2DTranspose = ConvTranspose
+
+"""
+Transposed 3D convolution layer (sometimes called Deconvolution).
+
+The need for transposed convolutions generally arises from the desire to use a
+transformation going in the opposite direction of a normal convolution,
+i.e., from something that has the shape of the output of some convolution
+to something that has the shape of its input while maintaining a connectivity
+pattern that is compatible with said convolution.
+"""
 Conv3DTranspose = ConvTranspose
 
 ## AvgPool layer
@@ -187,9 +226,9 @@ Pooling layers
 abstract type PoolingLayer <: Layer end
 
 struct AvgPool <: PoolingLayer
-    pool_size
-    padding
-    strides
+    pool_size::Union{Int,Tuple}
+    padding::Union{Int,Tuple}
+    strides::Union{Int,Tuple}
 end
 
 function AvgPool(pool_size=2; padding = 0, strides = pool_size)
@@ -207,15 +246,22 @@ function call(p::AvgPool, X)
 end
 
 AvgPool1D = AvgPool
+
+"""Average pooling operation for two dimensional (spatial) data."""
 AvgPool2D = AvgPool
-AAvgPool3D = AvgPool
 
+"""Average pooling operation for three dimensional (spatial) data."""
+AvgPool3D = AvgPool
 
+"""
+Adaptive Average Pool has a fixed size output and enables creating a convolutional
+network that can be used for multiple image formats.
+"""
 struct AdaptiveAvgPool <: PoolingLayer
     output_size::Tuple
 end
 
-function call(m::AdaptiveAvgPool, x)
+function call(m::AdaptiveAvgPool, x::Tensor)
     s = []
     for idx = 1:length(m.output_size)
         push!(s, size(x, idx) - m.output_size[idx] + 1)
@@ -228,17 +274,17 @@ end
 ## MaxPool layer
 
 struct MaxPool <: PoolingLayer
-    pool_size
-    padding
-    strides
-    nanOpt
+    pool_size::Union{Int,Tuple}
+    padding::Union{Int,Tuple}
+    strides::Union{Int,Tuple}
+    nanOpt::Int
 end
 
 function MaxPool(pool_size=2; padding = 0, strides = pool_size, nanOpt = 0)
     MaxPool(pool_size, padding, strides, nanOpt)
 end
 
-function call(p::MaxPool, X)
+function call(p::MaxPool, X::Tensor)
     Knet.pool(
         X,
         window = p.pool_size,
@@ -250,15 +296,22 @@ function call(p::MaxPool, X)
 end
 
 MaxPool1D = MaxPool
+
+"""Max pooling operation for two dimensional (spatial) data."""
 MaxPool2D = MaxPool
+
+"""Max pooling operation for three dimensional (spatial) data."""
 MaxPool3D = MaxPool
 
-
+"""
+Adaptive MaxPool has a fixed size output and enables creating a convolutional
+network that can be used for different image sizes.
+"""
 struct AdaptiveMaxPool <: PoolingLayer
     output_size::Tuple
 end
 
-function call(m::AdaptiveMaxPool, x)
+function call(m::AdaptiveMaxPool, x::Tensor)
     s = []
     for idx = 1:length(m.output_size)
         push!(s, size(x, idx) - m.output_size[idx] + 1)
@@ -266,6 +319,5 @@ function call(m::AdaptiveMaxPool, x)
     s = tuple(s...)
     return Knet.pool(x, window = s, padding = 0, stride = 1, mode = 1)
 end
-
 
 @debug "Loaded Convolutional modules"

@@ -1,16 +1,46 @@
+
+using ..Photon: getContext
+
 """
-A dataset that contains random generated samples.
-Ideal for quick testing of a model. Optionally you
-can pass a sleep value to simulate IO blocking.
+Datasets are repsonsible for loading a single sample. They need to have length and
+index methods implemented. Hence, they can all be passed to a Dataloader which can load
+multiple samples parallelly using threading.
 
-Examples:
+Pleae note that in case your whole dataset would fit in memory, you can feed it
+directly to the fit! function (so a dataset is no requirement)
 
-	ds = TestDataset((28,28,1),(10,),1000)
+```julia
+X = [randn(10,10,16) for i in 1:100]
+Y = [randn(1,16) for i in 1:100]
+fit!(workout, zip(X,Y))
+```
+
+Otherwise the combination of dataset/dataloader is your best bet.
+"""
+abstract type Dataset end
+
+
+"""
+A dataset that contains random generated samples. Ideal for quick testing
+of a model. The random values will be drawn from a normal distribution.
+
+You need to provide the shape of X, Y and the number of samples that the
+dataset should contain. Optionally you can specify a sleep value to simulate IO blocking.
+
+# Usage
+
+```julia
+xshape = (28,28,1)
+yshape = (10,)
+ds = TestDataset(xshape, yshape, 60000)
+
+ds = TestDataset((100,), (1,), 100, sleep=0.1)
+```
 """
 struct TestDataset <: Dataset
-    x
-    y
-	sleep
+    x::Vector{Array}
+    y::Vector{Array}
+	sleep::Float64
 
 	function TestDataset(shapeX::Tuple, shapeY::Tuple, samples::Int; sleep=0)
 		dtype = getContext().dtype
@@ -49,17 +79,18 @@ Note: Tested with JLD2 library only.
 Example:
 ========
 
-	using JLD2
+```julia
+using JLD2
 
-	jldopen("example.jld2", "w") do file
-	    file["image1"] = (randn(Float32,28,28,1), rand(0:9,1))
-	    file["image2"] = (randn(Float32,28,28,1), rand(0:9,1))
-	end
+jldopen("example.jld2", "w") do file
+    file["image1"] = (randn(Float32,28,28,1), rand(0:9,1))
+    file["image2"] = (randn(Float32,28,28,1), rand(0:9,1))
+end
 
-	f = jldopen("example.jld2", "r")
-	ds = JLD2Dataset(f)
-	ds[1]
-
+f = jldopen("example.jld2", "r")
+ds = JLD2Dataset(f)
+ds[1]
+```
 """
 struct JLDDataset <: Dataset
 	f
@@ -77,7 +108,7 @@ end
 
 
 """
-Dataset that loads data from a JuliaDB
+Dataset that loads data from a JuliaDB. Not yet implemented.
 """
 struct JuliaDBDataset{A,B} <: Dataset
     filenames::A
@@ -92,18 +123,27 @@ end
 
 
 """
-Dataset that loads an image from a file.
+Dataset that loads an single image from a file and optionally resizes the image.
+The labels are passed as is.
+
+# Usage
+
+```julia
+ds = ImageDataset(filenames, labels, resize=(200,200))
+```
 """
 struct ImageDataset <: Dataset
-    filenames
-    labels
-	resize
+    filenames::Vector{String}
+    labels::Vector
+	resize::Union{Nothing,Tuple}
 
 	function ImageDataset(filenames, labels; resize=nothing)
+		@assert length(filenames) == length(labels)
 		try
 			@eval import Images
+			@eval import ImageMagick
 		catch
-			@warn "Package Images not installed"
+			@warn "Package Images or ImageMagick not installed"
 		end
 		new(filenames, labels, resize)
 	end
@@ -114,30 +154,42 @@ Base.length(ds::ImageDataset) = length(ds.filenames)
 
 function Base.getindex(ds::ImageDataset, idx)
 	filename = ds.filenames[idx]
-	img = Images.load(filename);
-	img = Images.channelview(img);
-	img = permutedims(img, [2,3,1]);
-	img = convert(Array{Float32}, img);
-	if ds.resize != nothing
-		img = img[1:ds.resize[1], 1:ds.resize[2], :]
+	# img = Images.load(filename) has multi-thread issue
+    img = ImageMagick.load(filename)
+	img = Images.channelview(img)
+	img = permutedims(img, [2,3,1])
+	img = convert(Array{Float32}, img)
+	if ds.resize !== nothing
+		img = Images.imresize(img, ds.resize...)
 	end
 	return (img, ds.labels[idx])
 end
 
 
 
+"""
+Dataset that retrieves is data from a dataframe. The provided column names
+for X and Y can be either a single Symbol or a Vector of Symbols.
 
+# Usage
+
+```julia
+df = DataFrame(randn(4,20))
+ds = DFDataset(df, :x1, :x2)
+ds = DFDataset(df, [:x1, :x3], [:x2,:x4])
+```
 """
-Simple onehot encoder for a single sample.
-"""
-struct OneHot
-      labels
-      dtype
-      OneHot(labels; dtype=Float32) = new(label,dtype)
+struct DFDataset <: Dataset
+	df
+    X::Vector{Symbol}
+	Y::Vector{Symbol}
+
+	DFDataset(df,X,Y) = new(df, makeArray(X), makeArray(Y))
 end
 
-function (oh::OneHot)(x)
-      result = zeros(oh.dtype, length(oh.labels))
-      result[findfirst(x .== oh.labels)] = 1
-      result
+Base.length(ds::DFDataset) = size(df,1)
+
+function Base.getindex(ds::DFDataset, idx)
+	df = ds.df
+	(Vector(df[idx, ds.X]), Vector(df[idx, ds.Y]))
 end

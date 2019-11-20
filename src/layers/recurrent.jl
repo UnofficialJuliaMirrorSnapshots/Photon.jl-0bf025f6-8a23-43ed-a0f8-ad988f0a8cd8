@@ -55,7 +55,7 @@ function build(l::Recurrent, shape::Tuple)
     )
 end
 
-function call(layer::Recurrent, X)
+function call(layer::Recurrent, X::Tensor)
     output = layer.ops(X)
     if layer.last_only
         output[:, end, :]
@@ -65,10 +65,17 @@ function call(layer::Recurrent, X)
 end
 
 """
-A simple RNN layer.
+Applies a multi-layer Elman RNN with :tanh or :relu non-linearity to an
+input sequence.
+
+For each element in the input sequence, each layer computes the following
+function:
+
+``h_t = \\text{tanh}(W_{ih} x_t + b_{ih} + W_{hh} h_{(t-1)} + b_{hh})``
+
 """
 function RNN(
-    hidden_size,
+    hidden_size::Int,
     num_layers = 1;
     activation=:tanh,
     dropout = 0.0,
@@ -83,17 +90,32 @@ function RNN(
     (w=initw, b=initb, f=initf), activation)
 end
 
-"""
-Create a LSTM layer.
 
-Examples:
-=========
+@doc raw"""
+Applies a multi-layer long short-term memory (LSTM) RNN to an input sequence.
 
-    layer = LSTM(50)
+For each element in the input sequence, each layer computes the following
+function:
 
+
+``\begin{array}{ll}
+i_t = sigmoid(W_{ii} x_t + b_{ii} + W_{hi} h_{(t-1)} + b_{hi})
+\\f_t = sigmoid(W_{if} x_t + b_{if} + W_{hf} h_{(t-1)} + b_{hf})
+\\g_t = \tanh(W_{ig} x_t + b_{ig} + W_{hc} h_{(t-1)} + b_{hg})
+\\o_t = sigmoid(W_{io} x_t + b_{io} + W_{ho} h_{(t-1)} + b_{ho})
+\\c_t = f_t * c_{(t-1)} + i_t * g_t
+\\h_t = o_t * \tanh(c_t)
+\end{array}``
+
+# Usage
+
+```julia
+layer = LSTM(50)
+layer = LSTM(50, 2, bidirectional=true)
+```
 """
 function LSTM(
-    hidden_size,
+    hidden_size::Int,
     num_layers = 1;
     dropout = 0.0,
     bidirectional = false,
@@ -107,17 +129,29 @@ function LSTM(
 end
 
 
-"""
-Create a GRU layer
+@doc raw"""
+Applies a multi-layer gated recurrent unit (GRU) RNN to an input sequence.
 
-Examples:
-=========
+For each element in the input sequence, each layer computes the following
+function:
 
-    layer = GRU(50)
+``\begin{array}{ll}
+r_t = \sigma(W_{ir} x_t + b_{ir} + W_{hr} h_{(t-1)} + b_{hr})
+\\z_t = \sigma(W_{iz} x_t + b_{iz} + W_{hz} h_{(t-1)} + b_{hz})
+\\n_t = \tanh(W_{in} x_t + b_{in} + r_t * (W_{hn} h_{(t-1)}+ b_{hn}))
+\\h_t = (1 - z_t) * n_t + z_t * h_{(t-1)}
+\end{array}``
+
+# Usage
+
+```julia
+layer = GRU(50)
+layer = GRU(50, 2, bidirectional=true)
+```
 
 """
 function GRU(
-    hidden_size,
+    hidden_size::Int,
     num_layers = 1;
     dropout = 0.0,
     bidirectional = false,

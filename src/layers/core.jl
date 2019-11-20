@@ -50,7 +50,12 @@ end
 
 
 """
-Fully connected layer with an optional bias weight.
+Regular densely-connected NN layer.
+
+Dense implements the operation: output = activation(dot(input, weight) + bias) where
+activation is the element-wise activation function passed as the activation argument,
+weight is a weights matrix created by the layer, and bias is a bias vector created
+by the layer (only applicable if use_bias is true).
 
 # Usage
 
@@ -114,7 +119,7 @@ mutable struct Flatten <: Layer
 end
 
 function call(layer::Flatten, X::Tensor)
-	layer.dims == nothing ? Knet.mat(X) : Knet.mat(X, dims=layer.dims)
+	layer.dims === nothing ? Knet.mat(X) : Knet.mat(X, dims=layer.dims)
 end
 
 
@@ -133,7 +138,7 @@ Dropout layer with optional the rate (between 0 and 1) of dropout. If
 no rate is specified, 0.5 (so 50%) will be used.
 """
 struct Dropout <: Layer
-	rate
+	rate::Float64
 
 	function Dropout(rate=0.5)
 		@assert rate <= 1.0
@@ -147,7 +152,11 @@ function call(d::Dropout, X::Tensor)
 end
 
 """
-BatchNorm layer with support for an optional activation function
+Batch normalization layer (Ioffe and Szegedy, 2014). Normalizes the input at each batch,
+i.e. applies a transformation that maintains the mean activation close to 0
+and the activation standard deviation close to 1.
+
+Finally, if activation is not nothing, it is applied to the outputs as well.
 """
 struct BatchNorm <: Layer
 

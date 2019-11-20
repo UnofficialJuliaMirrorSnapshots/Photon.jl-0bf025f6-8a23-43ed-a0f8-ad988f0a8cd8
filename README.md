@@ -6,6 +6,7 @@
 
 [![License](http://img.shields.io/badge/license-MIT-brightgreen.svg?style=flat)](LICENSE.md)
 [![Build Status](https://travis-ci.org/neurallayer/Photon.jl.svg?branch=master)](https://travis-ci.org/neurallayer/Photon.jl)
+[![](https://img.shields.io/badge/docs-dev-blue.svg)](https://neurallayer.github.io/Photon.jl/dev/)
 [![codecov](https://codecov.io/gh/neurallayer/Photon.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/neurallayer/Photon.jl)
 [![Join the julia slack](https://img.shields.io/badge/chat-slack%23photon-yellow.svg)](https://slackinvite.julialang.org)
 
@@ -95,17 +96,16 @@ GTX-1080TI NVidia graphics card installed and running Ubuntu 18.04:
 The code that has been used is available in the *performance* sub directory.
 
 ## Features
-The goal is to provide a user friendly API for Machine Learning that enables
-both prototyping and production ready solutions, while remaining fast.
+The main goal is to provide a user friendly API for Machine Learning that enables
+developing both prototype and production ready solutions while remaining fast.
 
-Some of the features:
+Some of the key features:
 
-- The framework will infer the input sizes the first time it is being invoked. This
-  makes it quicker to get started, but also makes code more reusable.
+- Good support for the various ways you can to retrieve and transform your data.
 
-- Where possible, sensible defaults are selected.
+- Develop models with a minimal amount of code.
 
-- Support for iterative/discovery type of development with Notebooks or Juno.
+- Get all the required insights and visualizations into the performance of the model.
 
 
 ## Todo
@@ -136,6 +136,7 @@ We used several other open source frameworks for code and inspiration
 - Flux, we use it for inspiration. This has to be one of the most
   beautiful code bases out there.
 
-- Keras and MXNet for their well thought out API's.
+- Keras and MXNet for their well thought out API's. Also copied some of their
+  excellent documentation for layers and losses.
 
 - And of course Julia, that enables writing very fast deep learning applications.

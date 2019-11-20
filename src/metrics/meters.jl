@@ -1,6 +1,4 @@
 
-export TensorBoardMeter, ConsoleMeter, FileMeter, PlotMeter
-
 
 """
 Logs metrics to the console output. By default it will only log at the end of an epoch
@@ -72,7 +70,7 @@ mutable struct TensorBoardMeter <: Meter
 end
 
 function (meter::TensorBoardMeter)(workout::Workout, phase::Symbol)
-    if meter.logger == nothing
+    if meter.logger === nothing
         meter.logger = TensorBoardLogger.TBLogger(meter.path)
     end
 
@@ -129,7 +127,7 @@ Plot metrics using the Plots module. At the end of each epoch the plot will
 be updated with the values of the metrics. This works especially nice if you
 are prototyping some model in an IDE like Juno.
 """
-struct PlotMeter
+struct PlotMeter <: Meter
     plt
     metrics::Vector{Symbol}
     Plots::Module

@@ -1,11 +1,8 @@
 
-export SmartReducer, history, BinaryAccuracy, OneHotBinaryAccuracy
 
 """
 Stores the calculated metrics
 """
-
-
 struct SmartReducer <: MetricStore
     state::Dict{Int, Real}
     momentum::Real
@@ -23,9 +20,16 @@ end
 
 
 """
-Get the history of a metric.
+Get the history of a metric. The provided metric has the fully qualified symbol
+and the returned value is a tuple of steps and values.
+
+```julia
+h = history(workout, :val_loss)
+# returns e.g ([1000, 2000, 3000, 4000], [0.81, 0.73, 0.64, 0.61])
+```
+
 """
-function history(workout::Workout, symbol::Symbol)
+function history(workout::Workout, symbol::Symbol)::Tuple
       h = workout.history[symbol].state
       steps = sort(collect(keys(h)))
       return (steps, [h[step] for step in steps])

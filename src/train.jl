@@ -1,7 +1,8 @@
 import Base:haslength
 import Serialization
 
-export Workout, saveWorkout, loadWorkout, predict, fit!, hasmetric
+export Workout, saveWorkout, loadWorkout, predict, fit!, hasmetric,
+        freeze!, unfreeze!, validate
 
 
 # Callback niceties from Flux.jl
@@ -11,32 +12,33 @@ runall(fs::AbstractVector) = () -> foreach(call, fs)
 
 
 """
-The Workout keeps track of the progress of a training session. At least a model
+The Workout keeps track of the progress of the training session. At least a model
 and a loss function needs to be provided. Optional an optimizer and one or more
-metrics can be provided.
+metrics can be specified.
 
-If no optimizer is provided, SGD will be used. If no metrics are provided only
+If no optimizer is provided, SGD will be used. If no metrics are provided, only
 the loss during training and validation will be registered (:loss and :val_loss).
 
 # Usage
 
 ```julia
-workout = Workout(model, mse)
-workout = Workout(model, nll, SGD())
-workout = Workout(model, nll, SGD(); acc=BinaryAccuracy())
-```
+workout = Workout(model, L1Loss())
 
+workout = Workout(model, CrossEntropy(), SGD())
+
+workout = Workout(model, HingeLoss(), SGD(); acc=BinaryAccuracy())
+```
 """
 mutable struct Workout
     model::Layer
-    loss::Function
+    loss::Union{Loss,Function}
     opt
     metrics::Vector{Pair}
     history::IdDict{Symbol,MetricStore}
     steps::Int
     epochs::Int
 
-    function Workout(model::Layer, loss::Function, opt=Knet.SGD(); metrics...)
+    function Workout(model::Layer, loss::Union{Loss,Function}, opt=Knet.SGD(); metrics...)
         new(model, loss, opt, collect(metrics), IdDict(), 0, 0)
     end
 end
@@ -59,7 +61,7 @@ end
 
 
 """
-Save a workout to a file. This will save all the state that is captured in thr workout
+Save a workout to a file. This will save all the state that is captured in the workout
 and enables to continue at a later stage.
 """
 function saveWorkout(workout::Workout, filename="workout_$(workout.steps).dat")::String
@@ -83,6 +85,14 @@ function loadWorkout(filename)::Workout
     return workout
 end
 
+
+"""
+Stop a training session. If this is called outside the scope of
+a trianing session, just an error is thrown.
+"""
+function stop(workout::Workout, reason::String)
+    throw(ErrorException(reason))
+end
 
 
 """
@@ -127,7 +137,7 @@ end
 
 """
 Get the metric value for a fully qualified metric name and a certain step. If
-step is not provided the last step is used. If no value is found the passed
+step is not provided the last step will be used. If no value is found the passed
 function will not be invoked.
 
 # Usage
@@ -142,7 +152,7 @@ function getmetricvalue(f::Function, workout::Workout, metricname::Symbol, step=
     if haskey(workout.history, metricname)
         m = workout.history[metricname]
         value = get(m.state, step, nothing)
-        value != nothing && f(value)
+        value !== nothing && f(value)
     end
 end
 
@@ -159,19 +169,34 @@ function gradients(workout::Workout, minibatch=first(workout.dl); convertor=auto
     end
     gradients = []
     for p in Knet.params(J)
-        if p.opt == nothing; p.opt = Knet.clone(opt); end
+        if p.opt === nothing; p.opt = Knet.clone(opt); end
         push!(gradients, (p, Knet.grad(J,p)))
     end
     return gradients
 end
 
+"""
+Freeze a parameter so it no longer will be updated during training.
+"""
+function freeze!(p::Knet.Param)
+    p.opt = :NOUPDATE
+end
 
 """
-Perform the back propagation and update of weights in one go.
+Unfreeze a parameter so it will be updated again during training.
+"""
+function unfreeze!(p::Knet.Param)
+    p.opt = nothing
+end
+
+
+"""
+Perform the back propagation and update of weights in a single go.
 """
 function back!(J::Knet.Tape, opt)
     for p in Knet.params(J)
-        if p.opt == nothing; p.opt = Knet.clone(opt); end
+        if p.opt === nothing; p.opt = Knet.clone(opt); end
+        p.opt === :NOUPDATE && continue
         Knet.update!(p, Knet.grad(J,p))
     end
 end
@@ -223,7 +248,7 @@ end
 
 """
 Validate a minibatch and calculate the loss and metrics. Typically this function
-is called from the fit! method.
+is called from the fit! method. But if required can also be invoked directly.
 """
 function validate(workout::Workout, x, y)
     y_pred = workout.model(x)
@@ -268,7 +293,7 @@ function fit!(workout::Workout, data, validation=nothing;
             cb(workout, :train)
         end
 
-        if validation != nothing
+        if validation !== nothing
             d = validation isa Function ? validation() : validation
             for minibatch in d
                 validate(workout, convertor(minibatch)...)

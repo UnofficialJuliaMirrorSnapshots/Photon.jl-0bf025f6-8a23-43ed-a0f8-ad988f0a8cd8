@@ -9,8 +9,17 @@ using Documenter, Photon
 makedocs(modules=[Photon],
          sitename = "Photon",
          pages = ["Home" => "index.md",
+                  "API" => [
+                        "Core"    => "core.md",
+                        "Layers"  => "layers.md",
+                        "Losses"  => "losses.md",
+                        "Metrics" => "metrics.md",
+                        "Data"    => "data.md"
+                  ],
                   "Community" => "community.md"],
-         format = Documenter.HTML())
+         format = Documenter.HTML(
+                  prettyurls = get(ENV, "CI", nothing) == "true"
+         ))
 
 deploydocs(
         repo = "github.com/neurallayer/Photon.jl.git",
